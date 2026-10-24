@@ -3,32 +3,83 @@
     {
       "stock_batch": "aprct2501",
       "alert_batch": "APRCT-2501",
-      "drug": "Paracetamol IP 500 mg Tablets",
-      "messy": true
+      "kind": "messy_batch",
+      "alert_drug": "Paracetamol IP 500 mg Tablets",
+      "alert_brand": "Paracet 500 Tablets",
+      "stock_drug": "Paracetamol IP 500 mg Tablets",
+      "stock_maker": "Konis Pharmaceuticals Pvt.Ltd"
     },
     {
       "stock_batch": "KFM-2501",
       "alert_batch": "KFM-2501",
-      "drug": "Ibuprofen &Paracetamol Tablets IP",
-      "messy": false
+      "kind": "exact_copy",
+      "alert_drug": "Ibuprofen &Paracetamol Tablets IP",
+      "alert_brand": "Konflame",
+      "stock_drug": "Ibuprofen &Paracetamol Tablets IP",
+      "stock_maker": "Askon Health Care"
     },
     {
       "stock_batch": "DLT  260356 ",
       "alert_batch": "DLT-260356",
-      "drug": "Telmisartan & Amlodipine Tablets I.P.",
-      "messy": true
+      "kind": "messy_batch",
+      "alert_drug": "Telmisartan & Amlodipine Tablets I.P.",
+      "alert_brand": "T-SAR",
+      "stock_drug": "Telmisartan & Amlodipine Tablets I.P.",
+      "stock_maker": "Daffohills Laboratories Pvt. Ltd."
     },
     {
       "stock_batch": "SMF-103",
       "alert_batch": "SMF-103",
-      "drug": "Metformin Tablets I.P. 500 mg",
-      "messy": false
+      "kind": "exact_copy",
+      "alert_drug": "Metformin Tablets I.P. 500 mg",
+      "alert_brand": "",
+      "stock_drug": "Metformin Tablets I.P. 500 mg",
+      "stock_maker": "MARC Life Sciences Sikkim Khasra no. 35"
     },
     {
       "stock_batch": "mdt/4228",
       "alert_batch": "MDT-4228",
-      "drug": "RABEPRAZOLE SODIUM TABLETS IP",
-      "messy": true
+      "kind": "messy_batch",
+      "alert_drug": "RABEPRAZOLE SODIUM TABLETS IP",
+      "alert_brand": "Rabelanz-20",
+      "stock_drug": "RABEPRAZOLE SODIUM TABLETS IP",
+      "stock_maker": "Mayasha Lifesciences"
+    },
+    {
+      "stock_batch": "60098",
+      "alert_batch": "60098",
+      "kind": "brand_only",
+      "alert_drug": "Alprazolam Tablets IP 0.5 mg",
+      "alert_brand": "Alzomac-0.5 Tablets",
+      "stock_drug": "Alzomac 0.5",
+      "stock_maker": "Uniza Lifecare Private Limited"
+    },
+    {
+      "stock_batch": "SGALD26004",
+      "alert_batch": "SGALD26004",
+      "kind": "abbreviation",
+      "alert_drug": "Diclofenac Sodium Injection I.P.",
+      "alert_brand": "Aldigesic Injection",
+      "stock_drug": "Diclofenac Sod Inj IP",
+      "stock_maker": "SGS Pharmaceuticals Private Limited"
+    },
+    {
+      "stock_batch": "a 20718",
+      "alert_batch": "A20718",
+      "kind": "abbrev_messy_batch",
+      "alert_drug": "Drotaverine Hydrocloride suspension",
+      "alert_brand": "Dudot Duo suspension",
+      "stock_drug": "Drotaverine Susp",
+      "stock_maker": "Aspen Lifesciences Pvt Ltd"
+    },
+    {
+      "stock_batch": "LOF-26002",
+      "alert_batch": "LOF-26002",
+      "kind": "brand_only",
+      "alert_drug": "Loperamide Hydrochloride Tablets IP 2 mg",
+      "alert_brand": "Lofnec Tablets",
+      "stock_drug": "Lofnec 2mg",
+      "stock_maker": "Okvik Pharma Pvt Ltd"
     }
   ],
   "near_miss": [

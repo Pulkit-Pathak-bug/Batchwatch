@@ -31,6 +31,26 @@ class AuditLog(unittest.TestCase):
         p.assert_called_once()
 
 
+class Migration(unittest.TestCase):
+    def test_old_database_gains_brand_name_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "old.db"
+            old = sqlite3.connect(path)
+            old.execute("CREATE TABLE alert_rows (id INTEGER PRIMARY KEY, row_key TEXT UNIQUE, "
+                        "drug_name TEXT, batch_no TEXT)")
+            old.commit()
+            old.close()
+            conn = db.init_db(path)
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(alert_rows)")]
+            self.assertIn("brand_name", cols)
+            conn.close()
+
+    def test_brand_name_is_stored(self):
+        conn = db.init_db(":memory:")
+        db.save_alert_rows(conn, [{"drug_name": "D", "batch_no": "B", "brand_name": "Alzomac"}])
+        self.assertEqual(conn.execute("SELECT brand_name FROM alert_rows").fetchone()[0], "Alzomac")
+
+
 class Watcher(unittest.TestCase):
     def setUp(self):
         self.conn = db.init_db(":memory:")

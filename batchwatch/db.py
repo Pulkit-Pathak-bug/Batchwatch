@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS processed_alerts (
 CREATE TABLE IF NOT EXISTS alert_rows (
     id INTEGER PRIMARY KEY,
     row_key TEXT NOT NULL UNIQUE,
-    drug_name TEXT NOT NULL, batch_no TEXT NOT NULL,
+    drug_name TEXT NOT NULL, brand_name TEXT, batch_no TEXT NOT NULL,
     manufacturer TEXT, mfg_date TEXT, exp_date TEXT, reason TEXT,
     source TEXT, lab_state TEXT, report_month TEXT,
     first_seen TEXT DEFAULT CURRENT_TIMESTAMP
@@ -36,7 +36,7 @@ CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 """
 
-ROW_COLUMNS = ("drug_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
+ROW_COLUMNS = ("drug_name", "brand_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
                "reason", "source", "lab_state", "report_month")
 
 
@@ -44,6 +44,9 @@ def init_db(path: str | Path = DB_PATH) -> sqlite3.Connection:
     """Open the database and create the four tables if missing."""
     conn = sqlite3.connect(path)
     conn.executescript(SCHEMA)
+    if "brand_name" not in {r[1] for r in conn.execute("PRAGMA table_info(alert_rows)")}:
+        conn.execute("ALTER TABLE alert_rows ADD COLUMN brand_name TEXT")
+        conn.commit()
     return conn
 
 

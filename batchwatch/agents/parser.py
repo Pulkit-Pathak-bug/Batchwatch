@@ -7,11 +7,12 @@ from pydantic import BaseModel
 
 from batchwatch import db
 
-FIELDS = ("drug_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
+FIELDS = ("drug_name", "brand_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
           "reason", "source", "lab_state", "report_month")
 
 NSQ_KEYS = {
     "drug_name": "str_product_name",
+    "brand_name": "str_brand_name",
     "batch_no": "str_batch_no",
     "manufacturer": "str_manufactured_by",
     "mfg_date": "dt_manufacturing_date",
@@ -23,6 +24,7 @@ NSQ_KEYS = {
 }
 
 GEMINI_MODEL = "gemini-flash-latest"
+NO_BRAND = {"", "na", "n/a", "nil", "none", "-"}
 
 
 def clean(value: object) -> str:
@@ -44,6 +46,9 @@ def parse_nsq_json(payload: str | dict) -> tuple[list[dict], list[dict]]:
     except (ValueError, KeyError, TypeError) as exc:
         raise ValueError(f"not a CDSCO NSQ response: {exc!r}") from exc
     rows = [{f: clean(r.get(k)) for f, k in NSQ_KEYS.items()} for r in raw_rows]
+    for row in rows:
+        if row["brand_name"].lower() in NO_BRAND:
+            row["brand_name"] = ""
     return validate_rows(rows)
 
 

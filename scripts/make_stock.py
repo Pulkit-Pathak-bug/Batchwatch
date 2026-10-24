@@ -17,13 +17,18 @@ DATA = Path(__file__).resolve().parents[1] / "batchwatch" / "data"
 CACHE = DATA / "alerts" / "nsq_2026-09.json"
 COLUMNS = ["drug_name", "batch_no", "manufacturer", "exp_date", "quantity", "shelf_location"]
 
-# (alert batch to copy, how the batch is written in our stock)
+# (alert batch, batch as written in stock, stock drug name, stock maker, kind)
+# None means "copy the alert text exactly"
 PLANTED = [
-    ("APRCT-2501", "aprct2501"),
-    ("KFM-2501", "KFM-2501"),
-    ("DLT-260356", "DLT  260356 "),
-    ("SMF-103", "SMF-103"),
-    ("MDT-4228", "mdt/4228"),
+    ("APRCT-2501", "aprct2501", None, None, "messy_batch"),
+    ("KFM-2501", "KFM-2501", None, None, "exact_copy"),
+    ("DLT-260356", "DLT  260356 ", None, None, "messy_batch"),
+    ("SMF-103", "SMF-103", None, None, "exact_copy"),
+    ("MDT-4228", "mdt/4228", None, None, "messy_batch"),
+    ("60098", "60098", "Alzomac 0.5", "Uniza Lifecare Private Limited", "brand_only"),
+    ("SGALD26004", "SGALD26004", "Diclofenac Sod Inj IP", "SGS Pharmaceuticals Private Limited", "abbreviation"),
+    ("A20718", "a 20718", "Drotaverine Susp", "Aspen Lifesciences Pvt Ltd", "abbrev_messy_batch"),
+    ("LOF-26002", "LOF-26002", "Lofnec 2mg", "Okvik Pharma Pvt Ltd", "brand_only"),
 ]
 # (alert batch it is "near", a clearly different batch from the same maker)
 NEAR_MISSES = [("APRCT-2501", "APRCT-2408"), ("KFM-2501", "KFM-2412"), ("DLT-260356", "DLT-260221")]
@@ -78,11 +83,14 @@ def main() -> None:
         return row["manufacturer"].split(",")[0].strip()
 
     rows, truth = [], {"planted": [], "near_miss": []}
-    for alert_batch, written in PLANTED:
+    for alert_batch, written, drug, mfr, kind in PLANTED:
+        assert sum(r["batch_no"] == alert_batch for r in alerts) == 1, f"{alert_batch} not unique in feed"
         a = by_batch[alert_batch]
-        rows.append([a["drug_name"], written, maker(a), a["exp_date"], rng.randint(10, 80), shelf()])
-        truth["planted"].append({"stock_batch": written, "alert_batch": alert_batch,
-                                 "drug": a["drug_name"], "messy": written != alert_batch})
+        drug, mfr = drug or a["drug_name"], mfr or maker(a)
+        rows.append([drug, written, mfr, a["exp_date"], rng.randint(10, 80), shelf()])
+        truth["planted"].append({"stock_batch": written, "alert_batch": alert_batch, "kind": kind,
+                                 "alert_drug": a["drug_name"], "alert_brand": a["brand_name"],
+                                 "stock_drug": drug, "stock_maker": mfr})
     for alert_batch, other in NEAR_MISSES:
         a = by_batch[alert_batch]
         assert all(fuzz.ratio(norm(other), n) < 90 for n in alert_norms), other

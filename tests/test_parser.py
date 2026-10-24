@@ -13,6 +13,7 @@ RAW = {
             "dt_expiry_date": None,
             "str_manufactured_by": "Uniza  Lifecare   Pvt. Ltd.  , Kadi",
             "str_nsq_result": "Fails Dissolution",
+            "str_brand_name": "NA",
             "str_reporting_source": "State lab",
             "str_reported_by_lab_or_state": "LUCKNOW, Uttar Pradesh",
             "dt_reporting_month_year": "SEP-2026",
@@ -30,6 +31,7 @@ class ParseNsqJson(unittest.TestCase):
             rows[0],
             {
                 "drug_name": "Alprazolam Tablets IP 0.5 mg",
+                "brand_name": "",
                 "batch_no": "60098",
                 "manufacturer": "Uniza Lifecare Pvt. Ltd. , Kadi",
                 "mfg_date": "Feb-2026",
@@ -40,6 +42,15 @@ class ParseNsqJson(unittest.TestCase):
                 "report_month": "SEP-2026",
             },
         )
+
+    def test_brand_name_kept_but_placeholders_blanked(self):
+        def brand(value):
+            raw = {"aaData": [{"str_product_name": "D", "str_batch_no": "B", "str_brand_name": value}]}
+            return parser.parse_nsq_json(raw)[0][0]["brand_name"]
+
+        self.assertEqual(brand(" Alzomac-0.5  Tablets "), "Alzomac-0.5 Tablets")
+        for placeholder in ("NA", "N/A", "na", "-", "", None):
+            self.assertEqual(brand(placeholder), "", placeholder)
 
     def test_rejects_rows_missing_drug_or_batch(self):
         rows, rejected = parser.parse_nsq_json(RAW)

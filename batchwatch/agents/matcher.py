@@ -12,16 +12,46 @@ WEIGHTS = {"batch": 0.50, "drug": 0.35, "maker": 0.15}
 LEGAL_WORDS = {"pvt", "ltd", "limited", "private", "p", "co", "company", "inc", "llp"}
 RANK = {"confirmed": 2, "uncertain": 1}
 
+ABBREVIATIONS = {
+    "tab": "tablets", "tabs": "tablets", "tablet": "tablets",
+    "cap": "capsules", "caps": "capsules", "capsule": "capsules",
+    "inj": "injection", "susp": "suspension", "syr": "syrup", "oint": "ointment",
+    "soln": "solution", "sol": "solution", "hcl": "hydrochloride", "sod": "sodium",
+}
+PHARMACOPOEIA_TAGS = {"ip", "bp", "usp"}
+FORM_WORDS = {"tablets", "capsules", "injection", "suspension", "syrup", "ointment",
+              "solution", "mg", "mcg", "ml", "g", "iu"}
+
 
 def normalise_batch(batch: str) -> str:
     """Uppercase and strip whitespace, dashes and slashes."""
     return re.sub(r"[\s\-/]", "", batch or "").upper()
 
 
+def normalise_drug(name: str | None) -> str:
+    """Lowercase, expand Tab/Inj/Susp/HCl..., drop IP/BP/USP, split '500mg' into '500 mg'."""
+    text = re.sub(r"\b(?:i\.p|b\.p|u\.s\.p)\b\.?", " ", (name or "").lower())
+    text = re.sub(r"(\d)\s*(mg|mcg|ml|iu|g)\b", r"\1 \2", text)
+    text = re.sub(r"(?<!\d)\.|\.(?!\d)|[^a-z0-9. ]", " ", text)
+    words = [ABBREVIATIONS.get(w, w) for w in text.split() if w not in PHARMACOPOEIA_TAGS]
+    return " ".join(words)
+
+
 def _maker(name: str) -> str:
     """Lowercase, drop punctuation and legal suffixes (Pvt, Ltd...) so they don't inflate scores."""
     words = re.sub(r"[^a-z0-9 ]", " ", (name or "").lower()).split()
     return " ".join(w for w in words if w not in LEGAL_WORDS)
+
+
+def _drug_similarity(stock_name: str, alert: dict) -> tuple[float, str]:
+    """Best of stock name vs generic name and vs brand name; returns (score, which one won)."""
+    s = normalise_drug(stock_name)
+    generic = fuzz.token_sort_ratio(s, normalise_drug(alert.get("drug_name")), processor=utils.default_process)
+    brand_name = alert.get("brand_name") or ""
+    brand = 0.0
+    if brand_name and set(s.split()) - FORM_WORDS:
+        brand = fuzz.token_set_ratio(s, normalise_drug(brand_name), processor=utils.default_process)
+    return (brand, "brand") if brand > generic else (generic, "generic")
 
 
 def load_stock_csv(path: str | Path) -> list[dict]:
@@ -35,8 +65,7 @@ def _judge(stock: dict, alert: dict, nb_stock: str, nb_alert: str) -> dict | Non
     batch = 100.0 if nb_stock == nb_alert else fuzz.ratio(nb_stock, nb_alert, score_cutoff=BATCH_FUZZY_MIN)
     if not batch:
         return None
-    drug = fuzz.token_sort_ratio(stock.get("drug_name", ""), alert.get("drug_name", ""),
-                                 processor=utils.default_process)
+    drug, via = _drug_similarity(stock.get("drug_name", ""), alert)
     s_maker, a_maker = _maker(stock.get("manufacturer", "")), _maker(alert.get("manufacturer", ""))
     maker = fuzz.token_set_ratio(s_maker, a_maker) if s_maker and a_maker else None
 
@@ -44,10 +73,14 @@ def _judge(stock: dict, alert: dict, nb_stock: str, nb_alert: str) -> dict | Non
     parts = {"batch": batch, "drug": drug, "maker": maker}
     score = sum(parts[k] * w for k, w in weights.items()) / sum(weights.values())
 
+    if via == "brand":
+        drug_txt = f"stock name matches the alert's brand name '{alert['brand_name']}' ({drug:.0f}%)"
+    else:
+        drug_txt = f"drug names {drug:.0f}% similar"
     maker_txt = f"manufacturer {maker:.0f}% similar" if maker is not None else "manufacturer not comparable"
     head = f"Batch '{stock.get('batch_no', '')}' vs alert batch '{alert.get('batch_no', '')}'"
     if batch == 100.0:
-        base = f"{head}: identical after normalising ({nb_alert}); drug names {drug:.0f}% similar; {maker_txt}."
+        base = f"{head}: identical after normalising ({nb_alert}); {drug_txt}; {maker_txt}."
         if drug < DRUG_MIN:
             status, why = "uncertain", f" Same batch number but the drug names differ (need >= {DRUG_MIN}%) - check by hand."
         elif maker is not None and maker < MAKER_MIN:
@@ -55,7 +88,7 @@ def _judge(stock: dict, alert: dict, nb_stock: str, nb_alert: str) -> dict | Non
         else:
             status, why = "confirmed", " Same batch number and the same drug."
     else:
-        base = f"{head}: {batch:.0f}% similar, possible typo or misread; drug names {drug:.0f}% similar; {maker_txt}."
+        base = f"{head}: {batch:.0f}% similar, possible typo or misread; {drug_txt}; {maker_txt}."
         status, why = "uncertain", " Not an exact batch match - check the physical pack."
     return {"alert": alert, "status": status, "score": round(score, 1), "reason": base + why}
 
