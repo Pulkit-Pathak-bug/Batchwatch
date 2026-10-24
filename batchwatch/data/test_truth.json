@@ -1,0 +1,51 @@
+{
+  "planted": [
+    {
+      "stock_batch": "aprct2501",
+      "alert_batch": "APRCT-2501",
+      "drug": "Paracetamol IP 500 mg Tablets",
+      "messy": true
+    },
+    {
+      "stock_batch": "KFM-2501",
+      "alert_batch": "KFM-2501",
+      "drug": "Ibuprofen &Paracetamol Tablets IP",
+      "messy": false
+    },
+    {
+      "stock_batch": "DLT  260356 ",
+      "alert_batch": "DLT-260356",
+      "drug": "Telmisartan & Amlodipine Tablets I.P.",
+      "messy": true
+    },
+    {
+      "stock_batch": "SMF-103",
+      "alert_batch": "SMF-103",
+      "drug": "Metformin Tablets I.P. 500 mg",
+      "messy": false
+    },
+    {
+      "stock_batch": "mdt/4228",
+      "alert_batch": "MDT-4228",
+      "drug": "RABEPRAZOLE SODIUM TABLETS IP",
+      "messy": true
+    }
+  ],
+  "near_miss": [
+    {
+      "stock_batch": "APRCT-2408",
+      "near_alert_batch": "APRCT-2501",
+      "drug": "Paracetamol IP 500 mg Tablets"
+    },
+    {
+      "stock_batch": "KFM-2412",
+      "near_alert_batch": "KFM-2501",
+      "drug": "Ibuprofen &Paracetamol Tablets IP"
+    },
+    {
+      "stock_batch": "DLT-260221",
+      "near_alert_batch": "DLT-260356",
+      "drug": "Telmisartan & Amlodipine Tablets I.P."
+    }
+  ]
+}
