@@ -11,8 +11,11 @@ Stop rules live in the orchestrator only.
 ## Layout
 ```
 batchwatch/
-  agents/watcher.py   new alert PDFs in data/alerts/ not yet in DB
-  agents/parser.py    PDF -> list of {drug_name, batch_no, manufacturer, mfg_date, exp_date, reason}
+  agents/watcher.py   fetches the CDSCO NSQ JSON feed for a month, returns rows not yet in DB;
+                      falls back to the cached response in data/alerts/nsq_YYYY-MM.json
+  agents/parser.py    feed JSON (or old PDF, pdfplumber then Gemini) -> AlertRow dicts:
+                      {drug_name, batch_no, manufacturer, mfg_date, exp_date, reason,
+                       source, lab_state, report_month}
   agents/matcher.py   stock rows vs alert rows -> confirmed / uncertain / none
   agents/actor.py     drafts alert + return-request text per match
   orchestrator.py     plain Python pipeline

@@ -2,4 +2,5 @@ google-genai
 python-dotenv
 python-telegram-bot==22.*
 streamlit
+requests
 pdfplumber
