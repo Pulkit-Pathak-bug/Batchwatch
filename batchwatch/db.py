@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS matches (
     status TEXT CHECK (status IN ('confirmed', 'uncertain')),
     score REAL, reason TEXT, alert_text TEXT, return_text TEXT,
     decision TEXT DEFAULT 'pending', decided_by TEXT, decided_at TEXT,
+    ai_verdict TEXT, ai_confidence INTEGER, ai_note TEXT, ai_model TEXT, ai_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_match ON matches (alert_row_id, stock_batch);
@@ -59,7 +60,9 @@ ADDED_COLUMNS = {
     "alert_rows": {"brand_name": "TEXT"},
     "matches": {"stock_manufacturer": "TEXT", "exp_date": "TEXT", "quantity": "TEXT",
                 "shelf_location": "TEXT", "score": "REAL", "reason": "TEXT", "alert_text": "TEXT",
-                "return_text": "TEXT", "decided_by": "TEXT", "decided_at": "TEXT"},
+                "return_text": "TEXT", "decided_by": "TEXT", "decided_at": "TEXT",
+                "ai_verdict": "TEXT", "ai_confidence": "INTEGER", "ai_note": "TEXT", "ai_model": "TEXT",
+                "ai_at": "TEXT"},
 }
 
 ROW_COLUMNS = ("drug_name", "brand_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
@@ -152,6 +155,21 @@ def pending_matches(conn: sqlite3.Connection) -> list[dict]:
     ids = conn.execute("SELECT id FROM matches WHERE decision = 'pending' "
                        "ORDER BY (status = 'confirmed') DESC, score DESC, id").fetchall()
     return [get_match(conn, r["id"]) for r in ids]
+
+
+def matches_needing_review(conn: sqlite3.Connection) -> list[dict]:
+    """Pending uncertain matches that have no AI opinion yet (failed or never tried)."""
+    ids = conn.execute("SELECT id FROM matches WHERE status = 'uncertain' AND decision = 'pending' "
+                       "AND ai_verdict IS NULL ORDER BY id").fetchall()
+    return [get_match(conn, r["id"]) for r in ids]
+
+
+def set_ai_review(conn: sqlite3.Connection, match_id: int, review: dict) -> None:
+    """Store the AI's advisory opinion. Touches only the ai_* columns, never status or decision."""
+    conn.execute("UPDATE matches SET ai_verdict = ?, ai_confidence = ?, ai_note = ?, ai_model = ?, "
+                 "ai_at = CURRENT_TIMESTAMP WHERE id = ?",
+                 (review["verdict"], review["confidence"], review["note"], review["model"], match_id))
+    conn.commit()
 
 
 def decide_match(conn: sqlite3.Connection, match_id: int, decision: str, user_id: int) -> bool:

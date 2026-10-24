@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable
 
 from batchwatch import db
-from batchwatch.agents import actor, matcher, watcher
+from batchwatch.agents import actor, llm, matcher, reviewer, watcher
 
 STOCK_CSV = Path(__file__).resolve().parent / "data" / "stock.csv"
 
@@ -24,10 +24,39 @@ def should_stop(state: dict) -> bool:
     return False
 
 
+def review_uncertain(conn: sqlite3.Connection, ai_client=None) -> dict:
+    """Get an AI second opinion on pending uncertain matches that lack one. Advisory only.
+
+    Never changes status or decision. After the first failure the rest are skipped, so a dead
+    API costs one timeout, not one per match; unreviewed matches are retried on the next run.
+    """
+    ai = {"reviewed": 0, "failed": 0, "skipped": 0, "note": None}
+    todo = db.matches_needing_review(conn)
+    if llm.switched_off():
+        ai["note"] = "AI switched off"
+    elif todo:
+        client = ai_client or (llm.get_client() if llm.has_key() else None)
+        if client is None:
+            ai["note"] = "no GEMINI_API_KEY"
+        for i, match in enumerate(todo if client else []):
+            review = reviewer.review_match(match, client)
+            if review["verdict"] is None:
+                ai["failed"], ai["skipped"] = 1, len(todo) - i - 1
+                db.log_event(conn, "reviewer", "ai_unavailable", f"match {match['id']}: {review['note']}")
+                break
+            db.set_ai_review(conn, match["id"], review)
+            ai["reviewed"] += 1
+            db.log_event(conn, "reviewer", "ai_review", f"match {match['id']} ({match['stock_batch']}): "
+                         f"{review['verdict']} {review['confidence']}% via {review['model']}")
+    if ai["note"]:
+        db.log_event(conn, "reviewer", "ai_skipped", ai["note"])
+    return ai
+
+
 def run_pipeline(conn: sqlite3.Connection | None = None, stock_path: Path = STOCK_CSV,
                  fetch: Callable[[int, int], str] = watcher.fetch_nsq,
-                 year: int | None = None, month: int | None = None) -> dict:
-    """Run watch -> match -> act once and return the final state.
+                 year: int | None = None, month: int | None = None, ai_client=None) -> dict:
+    """Run watch -> match -> act (+ AI second opinion on uncertain matches) once and return the state.
 
     Stock is matched against every stored alert row, not just new ones; the unique index
     on matches stops anything already queued or decided from being queued again.
@@ -36,7 +65,8 @@ def run_pipeline(conn: sqlite3.Connection | None = None, stock_path: Path = STOC
     conn = db.init_db() if own_conn else conn
     state = {"new_alert_rows": [], "alert_rows": None, "stock_rows": None, "matches": None,
              "counts": {"confirmed": 0, "uncertain": 0}, "new_match_ids": [], "pending_total": 0,
-             "stop_reason": None, "data_source": None}
+             "stop_reason": None, "data_source": None,
+             "ai": {"reviewed": 0, "failed": 0, "skipped": 0, "note": None}}
     try:
         db.log_event(conn, "orchestrator", "pipeline_start", f"stock={stock_path.name}")
         info: dict = {}
@@ -61,6 +91,7 @@ def run_pipeline(conn: sqlite3.Connection | None = None, stock_path: Path = STOC
                 if created:
                     state["new_match_ids"].append(match_id)
             db.log_event(conn, "orchestrator", "drafted", f"{len(state['new_match_ids'])} new matches queued")
+            state["ai"] = review_uncertain(conn, ai_client)
 
         if state["stop_reason"]:
             db.log_event(conn, "orchestrator", "pipeline_stopped", state["stop_reason"])

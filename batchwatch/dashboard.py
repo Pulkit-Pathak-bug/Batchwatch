@@ -47,6 +47,7 @@ try:
     flagged = query(
         "SELECT m.id, m.status, m.decision, m.stock_drug AS drug, m.stock_batch AS batch,"
         " m.shelf_location AS shelf, m.quantity AS qty, ROUND(m.score) AS score, m.reason,"
+        " m.ai_verdict AS ai, m.ai_confidence AS ai_conf,"
         " a.report_month AS alert_month FROM matches m JOIN alert_rows a ON a.id = m.alert_row_id"
         " ORDER BY (m.status = 'confirmed') DESC, m.score DESC, m.id")
     agents = [r["actor"] for r in query("SELECT DISTINCT actor FROM audit_log ORDER BY actor")]

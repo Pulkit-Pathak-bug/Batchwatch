@@ -19,7 +19,8 @@ class Dashboard(unittest.TestCase):
         self.path = Path(self.tmp.name) / "test.db"
         conn = db.init_db(self.path)
         seed_match(conn)
-        seed_match(conn, {**STOCK, "drug_name": "Dolo 650", "batch_no": "DLT-260356"})
+        weak = seed_match(conn, {**STOCK, "drug_name": "Dolo 650", "batch_no": "DLT-260356"})
+        db.set_ai_review(conn, weak, {"verdict": "likely_different", "confidence": 71, "note": "n", "model": "m"})
         db.mark_alert_processed(conn, "old.pdf")
         db.log_event(conn, "watcher", "fetched", "x")
         db.log_event(conn, "bot", "started", "@b")
@@ -44,6 +45,12 @@ class Dashboard(unittest.TestCase):
         for col in ("drug", "batch", "shelf", "qty", "reason", "decision"):
             self.assertIn(col, flagged.columns)
         self.assertIn("identical after normalising", flagged["reason"][0])
+
+    def test_ai_opinion_is_shown_but_does_not_change_the_flag(self):
+        flagged = self.run_app().dataframe[0].value
+        self.assertEqual(list(flagged["ai"])[1], "likely_different")
+        self.assertEqual(list(flagged["ai_conf"])[1], 71)
+        self.assertEqual(list(flagged["status"]), ["confirmed", "uncertain"])
 
     def test_audit_table_filters_by_agent(self):
         at = self.run_app()

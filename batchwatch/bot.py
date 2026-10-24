@@ -10,6 +10,7 @@ from telegram.error import InvalidToken
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from batchwatch import db, orchestrator
+from batchwatch.agents import assistant, llm
 
 CALLBACK_PATTERN = r"^(ok|no):\d+$"
 DENIED_TEXT = "View-only: you are not an approver."
@@ -53,12 +54,27 @@ def format_match(m: dict) -> str:
             f"<b>Batch:</b> {_e(m['stock_batch'])}\n"
             f"<b>Shelf:</b> {_e(m['shelf_location'])}    <b>Qty:</b> {_e(m['quantity'])}\n\n"
             f"<b>Why it matched</b> (score {m['score']:.0f})\n{_e(m['reason'])}\n\n"
+            f"{_ai_block(m)}"
             f"<b>Alert evidence (CDSCO {_e(a.get('report_month'))})</b>\n"
             f"• Product: {_e(a['drug_name'])}{brand}\n"
             f"• Batch: {_e(a['batch_no'])}\n"
             f"• Maker: {maker}\n"
             f"• NSQ result: {_e(a.get('reason'))}\n"
             f"• Reported by: {_e(a.get('source'))}, {_e(a.get('lab_state'))}")
+
+
+AI_LABELS = {"likely_same": "LIKELY SAME", "likely_different": "LIKELY DIFFERENT", "cannot_tell": "CANNOT TELL"}
+
+
+def _ai_block(m: dict) -> str:
+    """The AI's advisory opinion, shown for uncertain matches only. It never changes the buttons or the flag."""
+    if m["status"] != "uncertain":
+        return ""
+    if not m.get("ai_verdict"):
+        return "<b>AI review:</b> unavailable, check by hand\n\n"
+    warn = "\n<b>Do not dismiss on the AI's opinion alone: check the pack.</b>" if m["ai_verdict"] == "likely_different" else ""
+    return (f"<b>AI review</b> (advisory, {_e(m.get('ai_model'))}): {AI_LABELS.get(m['ai_verdict'], 'CANNOT TELL')}, "
+            f"{m['ai_confidence']}% confident\n{_e(m.get('ai_note'))}{warn}\n<i>You decide; this match stays flagged.</i>\n\n")
 
 
 def keyboard_for(m: dict) -> InlineKeyboardMarkup:
@@ -112,6 +128,13 @@ def _summary(state: dict, pending: int) -> str:
              f"Stock rows checked: {len(state['stock_rows'] or [])}",
              f"Matches: {c['confirmed']} confirmed, {c['uncertain']} need a human check",
              f"Newly queued: {len(state['new_match_ids'])}, waiting for a decision: {pending}"]
+    ai = state.get("ai") or {}
+    if ai.get("reviewed"):
+        lines.append(f"AI review: {ai['reviewed']} done")
+    if ai.get("failed"):
+        lines.append("AI review: unavailable (will retry on the next /run)")
+    if ai.get("note"):
+        lines.append(f"AI review skipped: {ai['note']}")
     if state["stop_reason"]:
         lines.append(f"Stopped early: {state['stop_reason']}")
     return "\n".join(lines)
@@ -134,6 +157,32 @@ async def run_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(_summary(state, len(pending)))
     for m in pending:
         await post_match(context.bot, update.effective_chat.id, m)
+
+
+async def ask_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/ask <question>: Gemini answers using read-only tools over the stock list and the database."""
+    if not await _require_approver(update, context, "/ask"):
+        return
+    question = " ".join(context.args or []).strip()
+    if not question:
+        await update.message.reply_text("Usage: /ask <question>   e.g. /ask which flagged items are still pending?")
+        return
+    if llm.switched_off() or not llm.has_key():
+        await update.message.reply_text("AI assistant is unavailable (offline mode, switched off, or no GEMINI_API_KEY).")
+        return
+    conn, uid = context.bot_data["conn"], update.effective_user.id
+    db.log_event(conn, f"user:{uid}", "ask", question[:200])
+    try:
+        answer, used = await asyncio.wait_for(asyncio.to_thread(assistant.ask, question), timeout=30)
+    except Exception as exc:
+        db.log_event(conn, "assistant", "ask_failed", type(exc).__name__)
+        limited = getattr(exc, "code", None) == 429
+        await update.message.reply_text("The AI is rate-limited (free tier: 15 requests a minute). Try again in a minute."
+                                        if limited else
+                                        "The AI assistant could not answer right now. /log and the dashboard still work.")
+        return
+    db.log_event(conn, "assistant", "answered", f"tools: {', '.join(used) or 'none'}")
+    await update.message.reply_text(answer[:3500])
 
 
 async def log_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,7 +265,7 @@ async def approvers_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def _post_init(app: Application) -> None:
     """Register the command menu and log which bot is live."""
-    await app.bot.set_my_commands([("run", "Check stock against NSQ alerts"), ("log", "Last 10 audit entries"),
+    await app.bot.set_my_commands([("run", "Check stock against NSQ alerts"), ("log", "Last 10 audit entries"), ("ask", "Ask the AI about stock and alerts"),
                                    ("start", "Show your Telegram ID and role")])
     me = await app.bot.get_me()
     db.log_event(app.bot_data["conn"], "bot", "started", f"@{me.username}")
@@ -239,6 +288,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("run", run_cmd))
     app.add_handler(CommandHandler("log", log_cmd))
+    app.add_handler(CommandHandler("ask", ask_cmd))
     app.add_handler(CommandHandler("grant", grant_cmd))
     app.add_handler(CommandHandler("revoke", revoke_cmd))
     app.add_handler(CommandHandler("approvers", approvers_cmd))

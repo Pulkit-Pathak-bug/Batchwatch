@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from batchwatch import db
+from batchwatch.agents import llm
 
 FIELDS = ("drug_name", "brand_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
           "reason", "source", "lab_state", "report_month")
@@ -23,7 +24,6 @@ NSQ_KEYS = {
     "report_month": "dt_reporting_month_year",
 }
 
-GEMINI_MODEL = "gemini-flash-latest"
 NO_BRAND = {"", "na", "n/a", "nil", "none", "-"}
 
 
@@ -111,7 +111,7 @@ def _gemini_rows(pdf_path: Path, client) -> list[dict]:
     from google.genai import types
 
     response = client.models.generate_content(
-        model=GEMINI_MODEL,
+        model=llm.model(),
         contents=[
             types.Part.from_bytes(data=Path(pdf_path).read_bytes(), mime_type="application/pdf"),
             "Extract every Not-of-Standard-Quality drug batch listed in this CDSCO alert.",
@@ -134,11 +134,7 @@ def parse_pdf(pdf_path: str | Path, client=None, conn: sqlite3.Connection | None
     if rows and not rejected:
         return valid
     if client is None:
-        from dotenv import load_dotenv
-        from google import genai
-
-        load_dotenv()
-        client = genai.Client()
+        client = llm.get_client()
     rows = [{**dict.fromkeys(FIELDS, ""), **r} for r in _gemini_rows(pdf_path, client)]
     rows, _ = validate_rows(rows)
     db.log_event(conn, "parser", "gemini_fallback", f"{pdf_path.name}: {len(rows)} rows")
