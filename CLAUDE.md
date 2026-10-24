@@ -31,6 +31,7 @@ requirements.txt, .env (never read or print)
 ## Config (.env, never committed)
 `TELEGRAM_BOT_TOKEN` (from @BotFather) and `APPROVER_IDS` (comma-separated Telegram user IDs).
 Run the dashboard with `streamlit run batchwatch/dashboard.py --server.address localhost` (no login, so keep it local).
+Demo reset: `python -m scripts.reset_demo` (dry run) / `--yes` (backs up, then clears). `BATCHWATCH_OFFLINE=1` forces the cached feed.
 Run the bot with `python -m batchwatch.bot`; run tests with `python -m unittest discover -s tests -t .`
 
 ## Rules

@@ -69,7 +69,7 @@ Send `/start` to the bot to see your own ID and role. An admin can then run `/gr
 ```bash
 python -m batchwatch.bot                                              # the bot
 streamlit run batchwatch/dashboard.py --server.address localhost      # the dashboard
-python -m unittest discover -s tests -t .                             # 72 tests
+python -m unittest discover -s tests -t .                             # 104 tests
 ```
 
 Keep the dashboard on `localhost`: it has no login.
@@ -83,6 +83,13 @@ Keep the dashboard on `localhost`: it has no login.
 5. Have a second account press a button: it is refused and logged.
 6. Send `/log`, then refresh the dashboard. The counts and audit trail match.
 
+## Demo-day safety
+
+- **Offline fallback.** If the CDSCO request fails, times out (about 11 s worst case), or returns something that is not a valid feed (for example a Wi-Fi login page), the watcher loads the cached `nsq_2026-09.json`, logs `used cached data`, and the `/run` summary says "Data source: cached copy". If the month asked for has no cache, it uses the newest cached month. A bad response never overwrites the cache.
+- **Zero network in `/run`.** Start the bot with `BATCHWATCH_OFFLINE=1` and `/run` never contacts CDSCO. (The bot itself still needs Telegram.)
+- **Reset between runs.** `python -m scripts.reset_demo` shows what it would delete; add `--yes` to back up the database to `batchwatch/data/backups/` and clear matches, alert rows and the audit log (`--approvers` also clears granted approvers). It works while the bot is running. Match IDs are never reused, so an old button left in the chat answers "Unknown match" instead of acting on a new match.
+- **Checklist.** Start the bot and dashboard before you go on stage, on a network that reaches Telegram (use a phone hotspot if the venue blocks it). Reset. Send `/run`.
+
 ## Project layout
 
 ```
@@ -92,7 +99,8 @@ batchwatch/
   orchestrator.py      watch -> match -> act            db.py              SQLite + audit log
   bot.py               Telegram approval flow           dashboard.py       read-only view
   data/                alerts cache, stock.csv, test truth
-scripts/make_stock.py  regenerates the fake stock list  tests/            72 tests
+scripts/make_stock.py  regenerates the fake stock list  tests/            104 tests
+scripts/reset_demo.py  backs up + clears the demo state
 ```
 
 ## Honest limitations

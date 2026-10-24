@@ -105,7 +105,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def _summary(state: dict, pending: int) -> str:
     c = state["counts"]
+    source = {"live": "live CDSCO feed", "cache": "cached copy (CDSCO unreachable or offline mode)"}
     lines = [f"Run complete.",
+             f"Data source: {source.get(state.get('data_source'), 'unknown')}",
              f"New alert rows: {len(state['new_alert_rows'])} (stored: {len(state['alert_rows'] or [])})",
              f"Stock rows checked: {len(state['stock_rows'] or [])}",
              f"Matches: {c['confirmed']} confirmed, {c['uncertain']} need a human check",

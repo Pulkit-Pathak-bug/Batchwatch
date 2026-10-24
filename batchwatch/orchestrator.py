@@ -36,10 +36,12 @@ def run_pipeline(conn: sqlite3.Connection | None = None, stock_path: Path = STOC
     conn = db.init_db() if own_conn else conn
     state = {"new_alert_rows": [], "alert_rows": None, "stock_rows": None, "matches": None,
              "counts": {"confirmed": 0, "uncertain": 0}, "new_match_ids": [], "pending_total": 0,
-             "stop_reason": None}
+             "stop_reason": None, "data_source": None}
     try:
         db.log_event(conn, "orchestrator", "pipeline_start", f"stock={stock_path.name}")
-        state["new_alert_rows"] = watcher.find_new_alerts(conn, year, month, fetch=fetch)
+        info: dict = {}
+        state["new_alert_rows"] = watcher.find_new_alerts(conn, year, month, fetch=fetch, info=info)
+        state["data_source"] = info.get("source")
         state["alert_rows"] = db.load_alert_rows(conn)
         state["stock_rows"] = matcher.load_stock_csv(stock_path)
 

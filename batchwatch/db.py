@@ -5,7 +5,29 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "batchwatch.db"
 
-SCHEMA = """
+MATCHES_SQL = """
+CREATE TABLE IF NOT EXISTS matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_row_id INTEGER NOT NULL REFERENCES alert_rows(id),
+    stock_drug TEXT, stock_batch TEXT NOT NULL, stock_manufacturer TEXT, exp_date TEXT,
+    quantity TEXT, shelf_location TEXT,
+    status TEXT CHECK (status IN ('confirmed', 'uncertain')),
+    score REAL, reason TEXT, alert_text TEXT, return_text TEXT,
+    decision TEXT DEFAULT 'pending', decided_by TEXT, decided_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_match ON matches (alert_row_id, stock_batch);
+"""
+
+AUDIT_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log
+BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
+BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+"""
+
+# AUTOINCREMENT: match ids are never reused, so an old Telegram button can never hit a newer match.
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS processed_alerts (
     filename TEXT PRIMARY KEY,
     processed_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -18,17 +40,7 @@ CREATE TABLE IF NOT EXISTS alert_rows (
     source TEXT, lab_state TEXT, report_month TEXT,
     first_seen TEXT DEFAULT CURRENT_TIMESTAMP
 );
-CREATE TABLE IF NOT EXISTS matches (
-    id INTEGER PRIMARY KEY,
-    alert_row_id INTEGER NOT NULL REFERENCES alert_rows(id),
-    stock_drug TEXT, stock_batch TEXT NOT NULL, stock_manufacturer TEXT, exp_date TEXT,
-    quantity TEXT, shelf_location TEXT,
-    status TEXT CHECK (status IN ('confirmed', 'uncertain')),
-    score REAL, reason TEXT, alert_text TEXT, return_text TEXT,
-    decision TEXT DEFAULT 'pending', decided_by TEXT, decided_at TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_match ON matches (alert_row_id, stock_batch);
+{MATCHES_SQL}
 CREATE TABLE IF NOT EXISTS approvers (
     user_id INTEGER PRIMARY KEY,
     granted_by INTEGER,
@@ -40,10 +52,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ts TEXT DEFAULT CURRENT_TIMESTAMP,
     actor TEXT, action TEXT, detail TEXT
 );
-CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log
-BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
-CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
-BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
+{AUDIT_TRIGGERS}
 """
 
 ADDED_COLUMNS = {
