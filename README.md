@@ -30,7 +30,8 @@ The pipeline is plain Python: one function per stage, one `state` dict passed al
 
 ## Safety design
 
-- **A human approves every action.** Only Telegram user IDs in `APPROVER_IDS` can press buttons. Anyone else gets "view-only", and the attempt is logged with their ID.
+- **A human approves every action.** Only approvers can press buttons. Anyone else gets "view-only", and the attempt is logged with their ID.
+- **Two roles.** *Admins* are the Telegram IDs in `APPROVER_IDS` (`.env`). They can add or remove approvers live with `/grant <id>`, `/revoke <id>` and `/approvers`, with no restart. Granted approvers can approve but cannot grant anyone else, so access cannot spread by chain. Every grant and revoke is written to the audit log.
 - **The audit log is append-only.** SQL triggers abort any `UPDATE` or `DELETE` on it.
 - **Decisions are atomic.** One SQL statement flips a match from `pending`, so two quick presses cannot both win.
 - **The dashboard cannot write.** It opens SQLite with `mode=ro`, and a test checks the file is unchanged after it runs.
@@ -63,7 +64,7 @@ TELEGRAM_BOT_TOKEN=<token from @BotFather>
 APPROVER_IDS=<comma-separated Telegram user IDs>
 ```
 
-Send `/start` to the bot to see your own ID.
+Send `/start` to the bot to see your own ID and role. An admin can then run `/grant <that ID>` to let someone approve, without editing `.env`.
 
 ```bash
 python -m batchwatch.bot                                              # the bot
@@ -100,5 +101,5 @@ scripts/make_stock.py  regenerates the fake stock list  tests/            72 tes
 - **The main path uses no AI model.** Matching is deterministic fuzzy logic, which keeps it explainable. Gemini is used only as a fallback for old PDF alerts that fail table parsing, and that path has been tested with a mock but not against the live API.
 - **44% of alert rows carry no brand name,** so a pharmacy that stocks by brand alone can only be matched through the generic name on those rows.
 - **Short batch numbers** (under 10 characters) with a one-character typo score below the 90% fuzzy cutoff and are not flagged.
-- **Telegram long polling:** the bot must be running on a machine that stays awake. Approvers are set in `.env` and need a restart to change.
+- **Telegram long polling:** the bot must be running on a machine that stays awake. Admins are set in `.env` and need a restart to change; approvers can be granted and revoked live. The bot cannot look up a username, so `/grant` needs the numeric ID.
 - **Data source:** the CDSCO online NSQ table, fetched at most once per run. It is public data.

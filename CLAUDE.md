@@ -21,7 +21,8 @@ batchwatch/
   orchestrator.py     plain Python pipeline
   db.py               SQLite: processed_alerts, alert_rows, matches, audit_log (append-only)
   bot.py              Telegram bot (python-telegram-bot v22, async): /start /run /log + Approve/Reject buttons
-                      (callback_data 'ok:<match id>' / 'no:<match id>'); only APPROVER_IDS may press
+                      (callback_data 'ok:<match id>' / 'no:<match id>'); roles: admins = APPROVER_IDS in
+                      .env (can /grant /revoke /approvers), approvers = granted in the approvers table
   dashboard.py        Streamlit read-only view (later)
   data/alerts/, data/stock.csv
 requirements.txt, .env (never read or print)

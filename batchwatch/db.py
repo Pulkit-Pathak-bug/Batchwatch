@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS matches (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_match ON matches (alert_row_id, stock_batch);
+CREATE TABLE IF NOT EXISTS approvers (
+    user_id INTEGER PRIMARY KEY,
+    granted_by INTEGER,
+    granted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TEXT
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     ts TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -145,6 +151,37 @@ def decide_match(conn: sqlite3.Connection, match_id: int, decision: str, user_id
                        "WHERE id = ? AND decision = 'pending'", (decision, str(user_id), match_id))
     conn.commit()
     return cur.rowcount == 1
+
+
+def is_granted(conn: sqlite3.Connection, user_id: int) -> bool:
+    """True if user_id is an active approver granted through the bot."""
+    return conn.execute("SELECT 1 FROM approvers WHERE user_id = ? AND revoked_at IS NULL",
+                        (user_id,)).fetchone() is not None
+
+
+def grant_approver(conn: sqlite3.Connection, user_id: int, granted_by: int) -> bool:
+    """Make user_id an approver (re-grants after a revoke). False if already active."""
+    if is_granted(conn, user_id):
+        return False
+    conn.execute("INSERT INTO approvers (user_id, granted_by) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE "
+                 "SET granted_by = excluded.granted_by, granted_at = CURRENT_TIMESTAMP, revoked_at = NULL",
+                 (user_id, granted_by))
+    conn.commit()
+    return True
+
+
+def revoke_approver(conn: sqlite3.Connection, user_id: int) -> bool:
+    """Soft-revoke (the row stays for history). False if user_id was not an active approver."""
+    cur = conn.execute("UPDATE approvers SET revoked_at = CURRENT_TIMESTAMP "
+                       "WHERE user_id = ? AND revoked_at IS NULL", (user_id,))
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def list_approvers(conn: sqlite3.Connection) -> list[dict]:
+    """Active granted approvers, oldest grant first."""
+    return [dict(r) for r in conn.execute("SELECT user_id, granted_by, granted_at FROM approvers "
+                                          "WHERE revoked_at IS NULL ORDER BY granted_at, user_id")]
 
 
 def recent_log(conn: sqlite3.Connection, limit: int = 10) -> list[dict]:
