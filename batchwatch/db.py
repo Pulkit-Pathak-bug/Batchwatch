@@ -1,5 +1,6 @@
 """SQLite storage: processed_alerts, alert_rows, matches, audit_log."""
 import sqlite3
+import sys
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "batchwatch.db"
@@ -19,12 +20,15 @@ CREATE TABLE IF NOT EXISTS alert_rows (
 );
 CREATE TABLE IF NOT EXISTS matches (
     id INTEGER PRIMARY KEY,
-    alert_row_id INTEGER REFERENCES alert_rows(id),
-    stock_drug TEXT, stock_batch TEXT,
+    alert_row_id INTEGER NOT NULL REFERENCES alert_rows(id),
+    stock_drug TEXT, stock_batch TEXT NOT NULL, stock_manufacturer TEXT, exp_date TEXT,
+    quantity TEXT, shelf_location TEXT,
     status TEXT CHECK (status IN ('confirmed', 'uncertain')),
-    decision TEXT DEFAULT 'pending',
+    score REAL, reason TEXT, alert_text TEXT, return_text TEXT,
+    decision TEXT DEFAULT 'pending', decided_by TEXT, decided_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_match ON matches (alert_row_id, stock_batch);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY,
     ts TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -36,17 +40,28 @@ CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 """
 
+ADDED_COLUMNS = {
+    "alert_rows": {"brand_name": "TEXT"},
+    "matches": {"stock_manufacturer": "TEXT", "exp_date": "TEXT", "quantity": "TEXT",
+                "shelf_location": "TEXT", "score": "REAL", "reason": "TEXT", "alert_text": "TEXT",
+                "return_text": "TEXT", "decided_by": "TEXT", "decided_at": "TEXT"},
+}
+
 ROW_COLUMNS = ("drug_name", "brand_name", "batch_no", "manufacturer", "mfg_date", "exp_date",
                "reason", "source", "lab_state", "report_month")
 
 
 def init_db(path: str | Path = DB_PATH) -> sqlite3.Connection:
-    """Open the database and create the four tables if missing."""
+    """Open the database, create the tables, and add columns that older files lack."""
     conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
-    if "brand_name" not in {r[1] for r in conn.execute("PRAGMA table_info(alert_rows)")}:
-        conn.execute("ALTER TABLE alert_rows ADD COLUMN brand_name TEXT")
-        conn.commit()
+    for table, columns in ADDED_COLUMNS.items():
+        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, kind in columns.items():
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
+    conn.commit()
     return conn
 
 
@@ -80,17 +95,68 @@ def save_alert_rows(conn: sqlite3.Connection, rows: list[dict]) -> int:
     return conn.total_changes - before
 
 
-def save_match(conn: sqlite3.Connection, match: dict) -> int:
-    """Store a match and return its id."""
-    raise NotImplementedError
+def load_alert_rows(conn: sqlite3.Connection) -> list[dict]:
+    """Every stored alert row, including its id."""
+    return [dict(r) for r in conn.execute("SELECT * FROM alert_rows ORDER BY id")]
+
+
+def save_match(conn: sqlite3.Connection, match: dict) -> tuple[int, bool]:
+    """Store a matcher result plus drafts. Returns (match id, True if newly created).
+
+    The (alert_row_id, stock_batch) unique index makes a repeat insert a no-op.
+    """
+    stock, alert = match["stock"], match["alert"]
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO matches (alert_row_id, stock_drug, stock_batch, stock_manufacturer, "
+        "exp_date, quantity, shelf_location, status, score, reason, alert_text, return_text) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (alert["id"], stock.get("drug_name"), stock.get("batch_no"), stock.get("manufacturer"),
+         stock.get("exp_date"), stock.get("quantity"), stock.get("shelf_location"), match["status"],
+         match["score"], match["reason"], match.get("alert_text"), match.get("return_text")),
+    )
+    created = cur.rowcount == 1
+    conn.commit()
+    row = conn.execute("SELECT id FROM matches WHERE alert_row_id = ? AND stock_batch = ?",
+                       (alert["id"], stock.get("batch_no"))).fetchone()
+    return row["id"], created
+
+
+def get_match(conn: sqlite3.Connection, match_id: int) -> dict | None:
+    """One match with its alert row nested under 'alert', or None."""
+    row = conn.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+    if row is None:
+        return None
+    match = dict(row)
+    match["alert"] = dict(conn.execute("SELECT * FROM alert_rows WHERE id = ?",
+                                       (row["alert_row_id"],)).fetchone())
+    return match
+
+
+def pending_matches(conn: sqlite3.Connection) -> list[dict]:
+    """Undecided matches, confirmed first, then by score."""
+    ids = conn.execute("SELECT id FROM matches WHERE decision = 'pending' "
+                       "ORDER BY (status = 'confirmed') DESC, score DESC, id").fetchall()
+    return [get_match(conn, r["id"]) for r in ids]
+
+
+def decide_match(conn: sqlite3.Connection, match_id: int, decision: str, user_id: int) -> bool:
+    """Atomically move a match from pending to approved/rejected. False if already decided."""
+    cur = conn.execute("UPDATE matches SET decision = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP "
+                       "WHERE id = ? AND decision = 'pending'", (decision, str(user_id), match_id))
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def recent_log(conn: sqlite3.Connection, limit: int = 10) -> list[dict]:
+    """Newest audit_log entries first."""
+    return [dict(r) for r in conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,))]
 
 
 def log_event(conn: sqlite3.Connection | None, actor: str, action: str, detail: str) -> None:
-    """Append to audit_log (print if conn is None). No update or delete exists."""
-    if conn is None:
-        print(f"[{actor}] {action}: {detail}")
-        return
-    conn.execute("INSERT INTO audit_log (actor, action, detail) VALUES (?, ?, ?)",
-                 (actor, action, detail))
-    conn.commit()
-    print(f"[{actor}] {action}: {detail}")
+    """Append to audit_log (if conn is given) and echo to the console. No update or delete exists."""
+    if conn is not None:
+        conn.execute("INSERT INTO audit_log (actor, action, detail) VALUES (?, ?, ?)",
+                     (actor, action, detail))
+        conn.commit()
+    encoding = sys.stdout.encoding or "utf-8"
+    print(f"[{actor}] {action}: {detail}".encode(encoding, "replace").decode(encoding))

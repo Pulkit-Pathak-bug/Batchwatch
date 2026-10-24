@@ -20,11 +20,17 @@ batchwatch/
   agents/actor.py     drafts alert + return-request text per match
   orchestrator.py     plain Python pipeline
   db.py               SQLite: processed_alerts, alert_rows, matches, audit_log (append-only)
-  bot.py              Telegram bot (python-telegram-bot v22, async)
+  bot.py              Telegram bot (python-telegram-bot v22, async): /start /run /log + Approve/Reject buttons
+                      (callback_data 'ok:<match id>' / 'no:<match id>'); only APPROVER_IDS may press
   dashboard.py        Streamlit read-only view (later)
   data/alerts/, data/stock.csv
 requirements.txt, .env (never read or print)
 ```
+
+## Config (.env, never committed)
+`TELEGRAM_BOT_TOKEN` (from @BotFather) and `APPROVER_IDS` (comma-separated Telegram user IDs).
+Run the dashboard with `streamlit run batchwatch/dashboard.py --server.address localhost` (no login, so keep it local).
+Run the bot with `python -m batchwatch.bot`; run tests with `python -m unittest discover -s tests -t .`
 
 ## Rules
 - Plain Python. No agent frameworks.

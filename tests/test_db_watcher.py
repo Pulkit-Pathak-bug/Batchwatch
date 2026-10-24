@@ -38,11 +38,16 @@ class Migration(unittest.TestCase):
             old = sqlite3.connect(path)
             old.execute("CREATE TABLE alert_rows (id INTEGER PRIMARY KEY, row_key TEXT UNIQUE, "
                         "drug_name TEXT, batch_no TEXT)")
+            old.execute("CREATE TABLE matches (id INTEGER PRIMARY KEY, alert_row_id INTEGER, "
+                        "stock_drug TEXT, stock_batch TEXT, status TEXT, decision TEXT)")
             old.commit()
             old.close()
             conn = db.init_db(path)
             cols = [r[1] for r in conn.execute("PRAGMA table_info(alert_rows)")]
             self.assertIn("brand_name", cols)
+            match_cols = [r[1] for r in conn.execute("PRAGMA table_info(matches)")]
+            for col in ("reason", "shelf_location", "return_text", "decided_by"):
+                self.assertIn(col, match_cols)
             conn.close()
 
     def test_brand_name_is_stored(self):
