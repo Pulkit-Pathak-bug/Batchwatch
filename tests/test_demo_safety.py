@@ -170,6 +170,15 @@ class ResetDemo(unittest.TestCase):
         self.assertIn("AUTOINCREMENT", conn.execute("SELECT sql FROM sqlite_master WHERE name = 'matches'").fetchone()[0])
         self.assertGreater(seed_match(conn), 5)
 
+    def test_cli_dry_run_flag_is_explicit_and_cannot_combine_with_yes(self):
+        before = self.path.read_bytes()
+        with mock.patch.object(reset_demo.db, "DB_PATH", self.path):
+            reset_demo.main(["--dry-run"])
+            self.assertEqual(self.path.read_bytes(), before)
+            with self.assertRaises(SystemExit):
+                reset_demo.main(["--yes", "--dry-run"])
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_cli_does_nothing_without_yes(self):
         before = self.path.read_bytes()
         with mock.patch.object(reset_demo.db, "DB_PATH", self.path):

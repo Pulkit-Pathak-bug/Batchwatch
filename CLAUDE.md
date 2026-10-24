@@ -33,6 +33,7 @@ requirements.txt, .env (never read or print)
 Optional: `GEMINI_MODEL` (default gemini-3.5-flash-lite), `BATCHWATCH_AI=off` (no AI calls), `BATCHWATCH_OFFLINE=1` (also no AI).
 AI (google-genai): agents/reviewer.py = advisory second opinion on uncertain matches; agents/assistant.py = /ask with 4
 read-only tools. The AI must never change a flag, approve, or write. Tests set BATCHWATCH_AI=off and use fake clients.
+VS Code: Terminal > Run Task (.vscode/tasks.json) wraps all of the commands below; `scripts/stop_demo.ps1` stops the bot + dashboard.
 Run the dashboard with `streamlit run batchwatch/dashboard.py --server.address localhost` (no login, so keep it local).
 Demo reset: `python -m scripts.reset_demo` (dry run) / `--yes` (backs up, then clears). `BATCHWATCH_OFFLINE=1` forces the cached feed.
 Run the bot with `python -m batchwatch.bot`; run tests with `python -m unittest discover -s tests -t .`

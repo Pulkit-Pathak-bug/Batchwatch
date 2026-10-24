@@ -1,0 +1,86 @@
+{
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "resetMode",
+            "type": "pickString",
+            "description": "Reset demo data. The default only shows what WOULD be deleted.",
+            "options": [
+                { "label": "Dry run (delete nothing)", "value": "--dry-run" },
+                { "label": "CLEAR matches, alert rows and audit log (backup is made first)", "value": "--yes" }
+            ],
+            "default": "--dry-run"
+        }
+    ],
+    "tasks": [
+        {
+            "label": "BatchWatch: Start bot + dashboard",
+            "dependsOn": ["BatchWatch: Bot", "BatchWatch: Dashboard"],
+            "dependsOrder": "parallel",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Bot",
+            "type": "shell",
+            "command": "conda run --no-capture-output -n ds-bootcamp python -m batchwatch.bot",
+            "options": { "cwd": "${workspaceFolder}", "env": { "PYTHONUNBUFFERED": "1" } },
+            "isBackground": true,
+            "presentation": { "reveal": "always", "panel": "dedicated", "group": "batchwatch" },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Bot (offline mode, no CDSCO and no AI)",
+            "type": "shell",
+            "command": "conda run --no-capture-output -n ds-bootcamp python -m batchwatch.bot",
+            "options": { "cwd": "${workspaceFolder}", "env": { "PYTHONUNBUFFERED": "1", "BATCHWATCH_OFFLINE": "1" } },
+            "isBackground": true,
+            "presentation": { "reveal": "always", "panel": "dedicated", "group": "batchwatch" },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Dashboard",
+            "type": "shell",
+            "command": "conda run --no-capture-output -n ds-bootcamp python -m streamlit run batchwatch/dashboard.py --server.address localhost --server.headless true --browser.gatherUsageStats false",
+            "options": { "cwd": "${workspaceFolder}", "env": { "PYTHONUNBUFFERED": "1" } },
+            "isBackground": true,
+            "presentation": { "reveal": "always", "panel": "dedicated", "group": "batchwatch" },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Open dashboard in browser",
+            "type": "shell",
+            "command": "powershell -NoProfile -Command Start-Process http://localhost:8501",
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Stop bot + dashboard",
+            "type": "shell",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop_demo.ps1",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Reset demo data",
+            "type": "shell",
+            "command": "conda run --no-capture-output -n ds-bootcamp python -m scripts.reset_demo ${input:resetMode}",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Run tests",
+            "type": "shell",
+            "command": "conda run --no-capture-output -n ds-bootcamp python -m unittest discover -s tests -t .",
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "test", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "BatchWatch: Install requirements",
+            "type": "shell",
+            "command": "conda run --no-capture-output -n ds-bootcamp pip install -r requirements.txt",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        }
+    ]
+}

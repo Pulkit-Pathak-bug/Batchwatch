@@ -57,7 +57,9 @@ def reset(path: Path, *, clear_approvers: bool = False, apply: bool = False,
 def main(argv: list[str] | None = None) -> None:
     """CLI entry point."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--yes", action="store_true", help="actually clear (otherwise dry run)")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--yes", action="store_true", help="actually clear (otherwise dry run)")
+    mode.add_argument("--dry-run", action="store_true", help="show what would be deleted (the default)")
     ap.add_argument("--approvers", action="store_true", help="also clear granted approvers")
     args = ap.parse_args(argv)
     if not db.DB_PATH.exists():

@@ -81,10 +81,12 @@ Send `/start` to the bot to see your own ID and role. An admin can then run `/gr
 ```bash
 python -m batchwatch.bot                                              # the bot
 streamlit run batchwatch/dashboard.py --server.address localhost      # the dashboard
-python -m unittest discover -s tests -t .                             # 141 tests (never calls the real API)
+python -m unittest discover -s tests -t .                             # 142 tests (never calls the real API)
 ```
 
 Keep the dashboard on `localhost`: it has no login.
+
+**In VS Code:** `Terminal > Run Task...` (or `Ctrl+Shift+B` for the default) offers one-click tasks: *Start bot + dashboard*, *Stop bot + dashboard*, *Reset demo data* (a dropdown that defaults to a dry run), *Run tests*, *Open dashboard in browser*, *Bot (offline mode)* and *Install requirements*. They use the `ds-bootcamp` conda environment; edit `.vscode/tasks.json` if yours is named differently.
 
 ## 2-minute demo
 
@@ -114,7 +116,8 @@ batchwatch/
   agents/llm.py        model, client, on/off switches   db.py              SQLite + audit log
   orchestrator.py      watch -> match -> review -> act  dashboard.py       read-only view
   bot.py               Telegram approval flow           data/              alerts cache, stock.csv, test truth
-scripts/make_stock.py  regenerates the fake stock list  tests/            141 tests
+scripts/make_stock.py  regenerates the fake stock list  tests/            142 tests
+.vscode/tasks.json     one-click run/stop/reset/test    scripts/stop_demo.ps1  stops the bot + dashboard
 scripts/reset_demo.py  backs up + clears the demo state
 ```
 
